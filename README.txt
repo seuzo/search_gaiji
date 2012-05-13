@@ -11,6 +11,6 @@ http://densyodamasii.com/印刷データ→電子書籍で外字化が必要な�
 
 スクリプトは「スタイルをタグにマップ」したドキュメントを前提にしています。最終的にはXML書出しのためのツールです。
 動画：http://youtu.be/5PMhVUbbv58
-サンプル：http://bit.ly/KiE64Z
+サンプルドキュメント（CS5）：http://bit.ly/KiE64Z
 
 ご意見など頂ければ幸いです。
