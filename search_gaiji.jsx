@@ -9,10 +9,10 @@
     
     2012-05-13 0.1 プロトタイプ。まともに動くとは思えない。
     2012-05-14 0.1.1 sizeの単位をポイント換算で統一した。
+    2012-05-14 0.2 正規化リストを用意した。CID番号を２つ与えて置換。
     
     Todo:
     ・CIDのリスト
-    ・Unicodeのある文字の正規化→わざとやってる場合はどうする
     ・Unicodeのある合字を開かないようにする 
     ・ルビテスト
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ないかも
@@ -30,7 +30,11 @@
 //InDesign用スクリプト
 #target "InDesign"
 
-////////////////////////////////////////////設定：CIDリスト
+////////////////////////////////////////////設定：CIDリスト：グルーバル
+//正規化リスト：CID番号の1対1の多重リストで置換する。タグマーキングより前で行われる。[検索CID,置換CID]
+var CID_Normalization = [[4467, 2051], [4462, 2051]];
+
+//外字マーキングリスト：種類別のオブジェクト
 var CID_list = {};
 CID_list["OnlyCID"] = [10555, 10556, 10557, 10558];//CID/GID番号のみしか割り当てられていない文字
 CID_list["Ligature"] = [8037, 8054];//合字
@@ -40,14 +44,11 @@ CID_list["Unicode"] = [885];//Shift_JISに割り当てがなく、UNICODEのみ�
 
 
 
-
 ////////////////////////////////////////////エラー処理 
 function my_error(mess) { 
   if (arguments.length > 0) { alert(mess); }
   exit();
 }
-
-
 
 ////////////////////////////////////////////字形検索置換
 /*
@@ -121,7 +122,7 @@ function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
 
 
 ////////////////////////////////////////////以下メイン処理
-var i, ii, iii, j, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
+var i, ii, iii, iiii, n, j, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
 var error_count = 0;//エラーのカウンタ（10回エラーしたら強制終了）
 var match_obj_count = 0;//ご報告ためのカウンタ
 if (app.documents.length === 0) {my_error("ドキュメントが開かれていません")}
@@ -130,6 +131,21 @@ var my_fonts = my_doc.fonts;
 
 for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォントのループ
     if (my_fonts[i].writingScript !== 1) {continue;}//日本語フォント以外は無視する
+    
+    //正規化のためにCID_Normalizationに書かれた置換を実行する
+    for (n = 0; n < CID_Normalization.length; n++) {
+        try {
+            tmp_find = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_Normalization[n][0]}
+            tmp_change = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_Normalization[n][1]}
+            match_obj_list = my_FindChange_glyph(my_doc, tmp_find, tmp_change, true);
+        } catch (e) {
+            alert(e + "\r" + my_fonts[i].name + "\rCID: " + CID_Normalization[n][0]);//★現在はデバック用あとでトル
+            if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
+            error_count++;
+        }
+    }
+    
+    //マーキングのためのループ
     for ( ii in CID_list){//CID_listの種類ループ
         if (typeof CID_list[ii] === 'function' ) {continue;}//教科書通りの作法
         for ( iii = 0; iii < CID_list[ii].length; iii++){//それぞれのCID番号のループ
@@ -138,14 +154,14 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
                 tmp_find = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_list[ii][iii]}
                 match_obj_list = my_FindChange_glyph(my_doc, tmp_find, null, true);
             } catch (e) {
-                alert(e + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);
+                alert(e + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);//★現在はデバック用あとでトル
                 if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
                 error_count++;
             }
-            for (j = 0; j < match_obj_list.length; j++) {//マッチしたオブジェクトのループ
-                //alert(match_obj_list[j].contents + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);
-                match_obj_count += add_xmlElements(my_doc, match_obj_list[j], "gaiji", ii, CID_list[ii][iii]);
-                //match_obj_list[j].select();
+            for (iiii = 0; iiii < match_obj_list.length; iiii++) {//マッチしたオブジェクトのループ
+                //alert(match_obj_list[iiii].contents + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);
+                match_obj_count += add_xmlElements(my_doc, match_obj_list[iiii], "gaiji", ii, CID_list[ii][iii]);
+                //match_obj_list[iiii].select();
             }
         }
     }
