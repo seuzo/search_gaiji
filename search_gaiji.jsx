@@ -16,7 +16,6 @@
     
     ●Todo:
     ・CIDのリスト
-    ・CID_UNI_Ligatureでは合字でないものも置き換えが起きてしまう。
     ・ルビテスト
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ないかも
     ・マーキング方法（XMLエレメント＆属性）はこれでよいか？
@@ -156,7 +155,9 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
         }
         for (y = 0; y < match_obj_list.length; y++) {
             //Text.ligaturesを利用したい場面だけどなぜかいつもtrue
-            match_obj_list[y].contents = CID_UNI_Ligature[x][1];
+            if (match_obj_list[y].contents.length > 1) {
+                match_obj_list[y].contents = CID_UNI_Ligature[x][1];
+            }
         }
     }
        
