@@ -4,16 +4,19 @@
     ex.)
     <gaiji font="A-OTF リュウミン Pro" fstyle="R-KL" size="9" kind="Variant" cid="8705">髙</gaiji>
     
+    ●see also
     https://github.com/seuzo/search_gaiji
     http://densyodamasii.com/印刷データ→電子書籍で外字化が必要な文字のま/
     
+    ●history
     2012-05-13 0.1 プロトタイプ。まともに動くとは思えない。
     2012-05-14 0.1.1 sizeの単位をポイント換算で統一した。
     2012-05-14 0.2 正規化リストを用意した。CID番号を２つ与えて置換。
+    2012-05-14 0.3 ユニコードのある合字はその文字に置き換えた（開かないようにした）
     
-    Todo:
+    ●Todo:
     ・CIDのリスト
-    ・Unicodeのある合字を開かないようにする 
+    ・CID_UNI_Ligatureでは合字でないものも置き換えが起きてしまう。
     ・ルビテスト
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ないかも
     ・マーキング方法（XMLエレメント＆属性）はこれでよいか？
@@ -31,16 +34,24 @@
 #target "InDesign"
 
 ////////////////////////////////////////////設定：CIDリスト：グルーバル
-//正規化リスト：CID番号の1対1の多重リストで置換する。タグマーキングより前で行われる。[検索CID,置換CID]
+//Unicode番号を持つ合字のリスト。テキストに落とし込んだ時に開かないようにする。[検索CID,置換文字（列）,３項目目以降のフィールドはメモとして使える]
+var CID_UNI_Ligature = [[12098, "♨", "2668"], [8054, "㍿",  "337F"]];//3カラム目のUnicode番号は単なるメモ
+
+//正規化リスト：CID番号の1対1の多重リストで置換する。タグマーキングより前で行われる。[検索CID,置換CID,３項目目以降のフィールドはメモとして使える]
 var CID_Normalization = [[4467, 2051], [4462, 2051]];
 
 //外字マーキングリスト：種類別のオブジェクト
 var CID_list = {};
-CID_list["OnlyCID"] = [10555, 10556, 10557, 10558];//CID/GID番号のみしか割り当てられていない文字
-CID_list["Ligature"] = [8037, 8054];//合字
-CID_list["SurrogatePairs"] = [13953];//サロゲートペア
-CID_list["Variant"] = [8705, 13706];//Shift_JISで表現できない異体字
-CID_list["Unicode"] = [885];//Shift_JISに割り当てがなく、UNICODEのみで使える文字
+    //CID/GID番号のみしか割り当てられていない文字
+    CID_list["OnlyCID"] = [10555, 10556, 10557, 10558];
+    //合字
+    CID_list["Ligature"] = [8037, 8054];
+    //サロゲートペア
+    CID_list["SurrogatePairs"] = [13953];
+    //Shift_JISで表現できない異体字
+    CID_list["Variant"] = [8705, 13706];
+    //Shift_JISに割り当てがなく、UNICODEのみで使える文字
+    CID_list["Unicode"] = [885];
 
 
 
@@ -122,7 +133,7 @@ function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
 
 
 ////////////////////////////////////////////以下メイン処理
-var i, ii, iii, iiii, n, j, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
+var i, ii, iii, iiii, x, y, n, j, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
 var error_count = 0;//エラーのカウンタ（10回エラーしたら強制終了）
 var match_obj_count = 0;//ご報告ためのカウンタ
 if (app.documents.length === 0) {my_error("ドキュメントが開かれていません")}
@@ -132,20 +143,40 @@ var my_fonts = my_doc.fonts;
 for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォントのループ
     if (my_fonts[i].writingScript !== 1) {continue;}//日本語フォント以外は無視する
     
+    //Unicode番号を持つ合字をCID検索してUnicode文字に置換
+    for (x = 0; x < CID_UNI_Ligature.length; x++) {
+        match_obj_list = [];
+        try {
+            tmp_find = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_UNI_Ligature[x][0]}
+            match_obj_list = my_FindChange_glyph(my_doc, tmp_find, null, true);
+        } catch (e) {
+            alert(e + "\r" + my_fonts[i].name + "\rCID_UNI_Ligature: " + CID_UNI_Ligature[x][0] + "\rUnicode: " + CID_UNI_Ligature[x][1]);//★現在はデバック用あとでトル
+            if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
+            error_count++;
+        }
+        for (y = 0; y < match_obj_list.length; y++) {
+            //Text.ligaturesを利用したい場面だけどなぜかいつもtrue
+            match_obj_list[y].contents = CID_UNI_Ligature[x][1];
+        }
+    }
+       
+    
+    
     //正規化のためにCID_Normalizationに書かれた置換を実行する
     for (n = 0; n < CID_Normalization.length; n++) {
+        match_obj_list = [];
         try {
             tmp_find = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_Normalization[n][0]}
             tmp_change = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_Normalization[n][1]}
             match_obj_list = my_FindChange_glyph(my_doc, tmp_find, tmp_change, true);
         } catch (e) {
-            alert(e + "\r" + my_fonts[i].name + "\rCID: " + CID_Normalization[n][0]);//★現在はデバック用あとでトル
+            alert(e + "\r" + my_fonts[i].name + "\rCID_Normalization: " + CID_Normalization[n][0]);//★現在はデバック用あとでトル
             if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
             error_count++;
         }
     }
     
-    //マーキングのためのループ
+    //XMLタグマーキングのためのループ
     for ( ii in CID_list){//CID_listの種類ループ
         if (typeof CID_list[ii] === 'function' ) {continue;}//教科書通りの作法
         for ( iii = 0; iii < CID_list[ii].length; iii++){//それぞれのCID番号のループ
@@ -154,7 +185,7 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
                 tmp_find = {appliedFont:my_fonts[i].fontFamily, fontStyle:my_fonts[i].fontStyleName, glyphID:CID_list[ii][iii]}
                 match_obj_list = my_FindChange_glyph(my_doc, tmp_find, null, true);
             } catch (e) {
-                alert(e + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);//★現在はデバック用あとでトル
+                alert(e + "\r" + my_fonts[i].name + "\rCID_list[" + ii + "] : " + CID_list[ii][iii]);//★現在はデバック用あとでトル
                 if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
                 error_count++;
             }
