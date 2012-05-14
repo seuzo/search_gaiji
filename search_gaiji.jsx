@@ -154,14 +154,13 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
             error_count++;
         }
         for (y = 0; y < match_obj_list.length; y++) {
-            //Text.ligaturesを利用したい場面だけどなぜかいつもtrue
+            //Text.ligaturesを利用したい場面だけどなぜかいつもtrue。
             if (match_obj_list[y].contents.length > 1) {
+                //alert(CID_UNI_Ligature[x][1] + match_obj_list[y].contents.length);
                 match_obj_list[y].contents = CID_UNI_Ligature[x][1];
             }
         }
     }
-       
-    
     
     //正規化のためにCID_Normalizationに書かれた置換を実行する
     for (n = 0; n < CID_Normalization.length; n++) {
