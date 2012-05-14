@@ -4,10 +4,17 @@
     ex.)
     <gaiji font="A-OTF リュウミン Pro" fstyle="R-KL" size="9" kind="Variant" cid="8705">髙</gaiji>
     
+    https://github.com/seuzo/search_gaiji
+    http://densyodamasii.com/印刷データ→電子書籍で外字化が必要な文字のま/
+    
     2012-05-13  0.1 プロトタイプ。まともに動くとは思えない。
     
     Todo:
     ・CIDのリスト
+    ・Unicodeのある文字の正規化→わざとやってる場合はどうする
+    ・Unicodeのある合字を開かないようにする 
+    ・ルビテスト
+    ・文字サイズをポイント単位に共通化する
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ないかも
     ・マーキング方法（XMLエレメント＆属性）はこれでよいか？
     ・全体的にフォント置換をして、最適化スピードアップ→置換で字形変わるかも→たぶんボツ
@@ -104,7 +111,7 @@ function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
 ////////////////////////////////////////////以下メイン処理
 var i, ii, iii, j, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
 var error_count = 0;//エラーのカウンタ（10回エラーしたら強制終了）
-var match_obj_count = 0;//
+var match_obj_count = 0;//ご報告ためのカウンタ
 if (app.documents.length === 0) {my_error("ドキュメントが開かれていません")}
 var my_doc = app.documents[0];
 var my_fonts = my_doc.fonts;
