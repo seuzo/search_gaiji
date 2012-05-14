@@ -7,14 +7,14 @@
     https://github.com/seuzo/search_gaiji
     http://densyodamasii.com/印刷データ→電子書籍で外字化が必要な文字のま/
     
-    2012-05-13  0.1 プロトタイプ。まともに動くとは思えない。
+    2012-05-13 0.1 プロトタイプ。まともに動くとは思えない。
+    2012-05-14 0.1.1 sizeの単位をポイント換算で統一した。
     
     Todo:
     ・CIDのリスト
     ・Unicodeのある文字の正規化→わざとやってる場合はどうする
     ・Unicodeのある合字を開かないようにする 
     ・ルビテスト
-    ・文字サイズをポイント単位に共通化する
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ないかも
     ・マーキング方法（XMLエレメント＆属性）はこれでよいか？
     ・全体的にフォント置換をして、最適化スピードアップ→置換で字形変わるかも→たぶんボツ
@@ -79,6 +79,18 @@ function my_FindChange_glyph(my_range, my_find, my_change, reverse_order) {
     }
 }
 
+////////////////////////////////////////////characterオブジェクトの大きさをポイントサイズで得る
+//UnitValue.as()がQで使えない（バグ）ので、一時的に単位を変更する
+function get_pointsize_ofChar(char_obj) {
+    var my_doc = app.documents[0];
+    var org_unit = my_doc.viewPreferences.textSizeMeasurementUnits;//オリジナルを退避
+    if (org_unit === MeasurementUnits.POINTS) {return char_obj.pointSize}
+    my_doc.viewPreferences.textSizeMeasurementUnits = MeasurementUnits.POINTS;
+    var my_size = char_obj.pointSize;
+    my_doc.viewPreferences.textSizeMeasurementUnits = org_unit;//オリジナルに復帰
+    return my_size;
+}
+
 ////////////////////////////////////////////テキストオブジェクトにXMLエレメントを追加
 function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
     var my_story = my_txt.parentStory;//親ストーリ
@@ -99,7 +111,7 @@ function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
     //属性の追加
     my_txt_element.xmlAttributes.add("font", my_txt.appliedFont.fontFamily);
     my_txt_element.xmlAttributes.add("fstyle", my_txt.appliedFont.fontStyleName);
-    my_txt_element.xmlAttributes.add("size", my_txt.pointSize.toString());
+    my_txt_element.xmlAttributes.add("size", get_pointsize_ofChar(my_txt).toString());
     my_txt_element.xmlAttributes.add("kind", cid_kind.toString());
     my_txt_element.xmlAttributes.add("cid", cid_no.toString());
    
