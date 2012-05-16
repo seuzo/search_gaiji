@@ -7,23 +7,25 @@
     ●see also
     https://github.com/seuzo/search_gaiji
     http://densyodamasii.com/印刷データ→電子書籍で外字化が必要な文字のま/
+    http://www.pubridge.jp/info/20120515/
     
     ●history
     2012-05-13 0.1 プロトタイプ。まともに動くとは思えない。
     2012-05-14 0.1.1 sizeの単位をポイント換算で統一した。
     2012-05-14 0.2 正規化リストを用意した。CID番号を２つ与えて置換。
     2012-05-14 0.3 ユニコードのある合字はその文字に置き換えた（開かないようにした）
-    2012-05-14 0.3.1 合字とユニコード文字の違いを文字数差で解消。Text.ligaturesはなぜかいつもtrue。
+    2012-05-14 0.3.1 合字とユニコード文字の違いを文字数差で解消。Text.ligaturesはなぜかいつもtrue。→ （v0.5）Unicode文字そのものも置き換えになる。
     2012-05-14 0.3.2  @JunTajimaさんの合字リストを取り込んだ
     2012-05-15 0.4 テーブルとプログラムの分離。「table.json」テーブル本体、「table_index.json」フォント別インデックス。
+    2012-05-17 0.5 データ構造の変更。「CID_UNI_Ligature」と「CID_Normalization」を統合して「PRE_Normalization」（タグ処理前置換テーブル）にした。タグ挿入後に実行する「POST_Normalization」（タグ処理後置換テーブル）を入れた。
     
     ●Todo:
-    ・CIDのリスト
-    ・ルビテスト
+    ・CIDのリスト → ユーザーが整備 → 回収・公開・廻流がなければこのプログラムは死ぬ。
+    ・ルビテスト → やらなきゃいけないんだろうけど、度胸ががない。意味がよくわかっていないかも。
     ・メインの処理をUndoModes.FAST_ENTIRE_SCRIPT化→変更は少ないからあまり効果ない→たぶんやらない
-    ・SING→見て見ないフリ
-    ・まだやろうとしていることの本質がわかっていない感じする。→ このプログラムはポリシーじゃない。ユーザーが任意のCIDを自由にマークするためのもの。 →満点ない。65点の人がスキ！
-    
+    ・SING→見て見ないフリ→決定！　もうすぐTodoからも消えます。歴史上、なかったことに！！！
+    ・まだやろうとしていることの本質がわかっていない感じする。→ このプログラムはポリシーじゃない。ユーザーが任意のCIDを自由にマークするため。→ ユーザーって誰よ？ →満点ない。65点の人がスキ！
+        
 */
 
 //InDesign用スクリプト
@@ -139,10 +141,10 @@ function add_xmlElements(my_doc, my_txt, tag_name, cid_kind, cid_no) {
 
 
 ////////////////////////////////////////////以下メイン処理
-var CID_UNI_Ligature;////Unicode番号を持つ合字のリスト。テキストに落とし込んだ時に開かないようにする。[検索CID,置換文字（列）,３項目目以降のフィールドはメモとして使える]
-var CID_Normalization;//正規化リスト：CID番号の1対1の多重リストで置換する。タグマーキングより前で行われる。[検索CID,置換CID,３項目目以降のフィールドはメモとして使える]
-var CID_list; //外字マーキングリスト：種類別のオブジェクト
-var i, ii, iii, iiii, x, y, n, j, tmp_font_styleName, tmp_font_familyName, tmp_index, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
+var PRE_Normalization;//任意のCID番号を任意の文字（列）に置き換える。CID_listでの処理前に行われる置換。例えば、Unicode番号を持つ合字のリストをテキストに落とし込んだ時に開かないようにする。	[検索CID,置換文字（列）,３項目目以降のフィールドはメモとして使える]
+var CID_list; //外字マーキングリスト：種類別のオブジェクト：それぞれの種類はXMLタグの属性値として使われます。
+var POST_Normalization; //任意のCID番号を任意の文字（列）に置き換える。CID_listでの処理後に行われる置換。例えば、ビブロスフォントやピクトグラムなど、Unicodeと字形が乖離しているフォントなどの後処理を想定。ex.）「<gaiji 諸属性>A</gaiji>」を「<gaiji 諸属性>（アイロン弱）</gaiji>」みたいな感じ。	[検索CID,置換文字（列）,３項目目以降のフィールドはメモとして使える]
+var i, ii, iii, iiii, x, y, m, n, j, tmp_font_styleName, tmp_font_familyName, tmp_index, tmp_find, match_obj_list;//ループが多いので最初に変数の宣言してみる。気持ちの問題。
 var error_count = 0;//エラーのカウンタ（10回エラーしたら強制終了）
 var match_obj_count = 0;//ご報告ためのカウンタ
 
@@ -154,7 +156,8 @@ if (app.documents.length === 0) {my_error("ドキュメントが開かれてい�
 var my_doc = app.documents[0];
 var my_fonts = my_doc.fonts;
 
-for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォントのループ
+//ドキュメント使用フォントのループ
+for ( i = 0; i < my_fonts.length; i++) {
     if (my_fonts[i].writingScript !== 1) {continue;}//日本語フォント以外は無視する
     tmp_font_familyName = my_fonts[i].fontFamily;//フォントファミリ名
     tmp_font_styleName = my_fonts[i].fontStyleName;//フォントスタイル名
@@ -162,43 +165,26 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
     //フォントごとにテーブルを読み替え
     tmp_index = my_json_index[tmp_font_familyName];//カレントフォントが使用するmy_jsonテーブルのインデックス番号
     if (tmp_index === undefined) {tmp_index = 0;}//フォントファミリがマッチしなければ、汎用的に使える0番テーブル
-    CID_UNI_Ligature = my_json[tmp_index]["CID_UNI_Ligature"];
-    CID_Normalization = my_json[tmp_index]["CID_Normalization"];
+    PRE_Normalization = my_json[tmp_index]["PRE_Normalization"];
     CID_list = my_json[tmp_index]["CID_list"];
+    POST_Normalization = my_json[tmp_index]["POST_Normalization"];
 
-    //Unicode番号を持つ合字をCID検索してUnicode文字に置換
-    for (x = 0; x < CID_UNI_Ligature.length; x++) {
+
+    //任意のCID番号検索してUnicode文字列に置換するループ（タグ処理前）
+    for (x = 0; x < PRE_Normalization.length; x++) {
         match_obj_list = [];
         try {
-            tmp_find = {appliedFont:tmp_font_familyName, fontStyle:tmp_font_styleName, glyphID:CID_UNI_Ligature[x][0]}
+            tmp_find = {appliedFont:tmp_font_familyName, fontStyle:tmp_font_styleName, glyphID:PRE_Normalization[x][0]}
             match_obj_list = my_FindChange_glyph(my_doc, tmp_find, null, true);
         } catch (e) {
-            alert(e + "\r" + my_fonts[i].name + "\rCID_UNI_Ligature: " + CID_UNI_Ligature[x][0] + "\rUnicode: " + CID_UNI_Ligature[x][1]);//★現在はデバック用あとでトル
+            alert(e + "\r" + my_fonts[i].name + "\rPRE_Normalization: " + PRE_Normalization[x][0] + "\rUnicode: " + PRE_Normalization[x][1]);//★現在はデバック用あとでトル
             if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
             error_count++;
         }
         for (y = 0; y < match_obj_list.length; y++) {
-            //Text.ligaturesを利用したい場面だけどなぜかいつもtrue。
-            if (match_obj_list[y].contents.length > 1) {
-                //alert(CID_UNI_Ligature[x][1] + match_obj_list[y].contents.length);
-                match_obj_list[y].contents = CID_UNI_Ligature[x][1];
-            }
+            match_obj_list[y].contents = PRE_Normalization[x][1];
         }
-    }
-    
-    //正規化のためにCID_Normalizationに書かれた置換を実行する
-    for (n = 0; n < CID_Normalization.length; n++) {
-        match_obj_list = [];
-        try {
-            tmp_find = {appliedFont:tmp_font_familyName, fontStyle:tmp_font_styleName, glyphID:CID_Normalization[n][0]}
-            tmp_change = {appliedFont:tmp_font_familyName, fontStyle:tmp_font_styleName, glyphID:CID_Normalization[n][1]}
-            match_obj_list = my_FindChange_glyph(my_doc, tmp_find, tmp_change, true);
-        } catch (e) {
-            alert(e + "\r" + my_fonts[i].name + "\rCID_Normalization: " + CID_Normalization[n][0]);//★現在はデバック用あとでトル
-            if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
-            error_count++;
-        }
-    }
+    }//PRE_Normalizationのループ
     
     //XMLタグマーキングのためのループ
     for ( ii in CID_list){//CID_listの種類ループ
@@ -216,11 +202,28 @@ for ( i = 0; i < my_fonts.length; i++) {//ドキュメント使用フォント�
             for (iiii = 0; iiii < match_obj_list.length; iiii++) {//マッチしたオブジェクトのループ
                 //alert(match_obj_list[iiii].contents + "\r" + my_fonts[i].name + "\r" + ii + " : " + CID_list[ii][iii]);
                 match_obj_count += add_xmlElements(my_doc, match_obj_list[iiii], "gaiji", ii, CID_list[ii][iii]);
-                //match_obj_list[iiii].select();
             }
         }
-    }
-}
+    }//CID_listの種類ループ
+
+    //任意のCID番号検索してUnicode文字列に置換するループ（タグ処理後）
+    for (m = 0; m < POST_Normalization.length; m++) {
+        match_obj_list = [];
+        try {
+            tmp_find = {appliedFont:tmp_font_familyName, fontStyle:tmp_font_styleName, glyphID:POST_Normalization[m][0]}
+            match_obj_list = my_FindChange_glyph(my_doc, tmp_find, null, true);
+        } catch (e) {
+            alert(e + "\r" + my_fonts[i].name + "\rPOST_Normalization: " + POST_Normalization[m][0]);//★現在はデバック用あとでトル
+            if (error_count > 9){my_error("エラーが10回以上カウントされたので、強制終了します")}//リストが長いので延々とエラーダイアログを見るかもしれない予防
+            error_count++;
+        }
+        for (n = 0; n < match_obj_list.length; n++) {
+            match_obj_list[n].contents = POST_Normalization[m][1];
+        }
+    }//POST_Normalization
+
+
+}//fontsループ
 
 //ご報告
 if (match_obj_count === 0 ) {
